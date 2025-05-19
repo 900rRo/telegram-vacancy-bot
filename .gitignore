@@ -1,0 +1,14 @@
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# IDE files (если используете PyCharm или VSCode)
+.idea/
+.vscode/
+
+# Virtual environment (если используете)
+venv/
