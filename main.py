@@ -172,8 +172,10 @@ def main():
     # Webhook + aiohttp
     app = web.Application()
     app["bot"] = bot_app
-    webhook_handler = WebhookRequestHandler(application=bot_app, check_token=False)
-    app.router.add_post(WEBHOOK_SECRET_PATH, webhook_handler.handle)
+
+    # Правильный маршрут для webhook с использованием встроенного webhook_handler
+    app.router.add_post(WEBHOOK_SECRET_PATH, bot_app.webhook_handler())
+
     app.on_startup.append(on_startup)
 
     web.run_app(app, port=PORT)
