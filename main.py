@@ -1,26 +1,29 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, ContextTypes, filters
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ConversationHandler, ContextTypes, filters
+)
+from aiohttp import web
 import os
 from dotenv import load_dotenv
 
-# Загрузка переменных из .env
 load_dotenv()
 
-# Получаем значения из переменных окружения
 TELEGRAM_ID = os.getenv("TELEGRAM_ID")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_SECRET_PATH = f"/{BOT_TOKEN}"
+PORT = int(os.getenv("PORT", "8443"))
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 # Состояния
 SELECT_ACTION, SELECT_CHANNEL, ENTER_VACANCY, CONFIRM_VACANCY, SHOW_INFO, SHOW_SUPPORT = range(6)
 
-# Каналы
 CHANNELS = {
     "WorkDrom": "@WorkDrom",
     "Заработок на пляже": "@zarabotoknaplyazhe",
     "Вакансии рядом": "@Job0pening3"
 }
 
-# Старт
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("Опубликовать вакансию", callback_data="publish")],
@@ -30,19 +33,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет! Что вы хотите сделать?", reply_markup=InlineKeyboardMarkup(keyboard))
     return SELECT_ACTION
 
-# Получение Telegram ID
 async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     await update.message.reply_text(f"Ваш Telegram ID: {user_id}")
 
-# Пинг-функция
 async def ping(context: ContextTypes.DEFAULT_TYPE):
     try:
         await context.bot.send_message(chat_id=TELEGRAM_ID, text="✅ Я работаю!")
     except Exception as e:
         print(f"Ошибка при отправке пинга: {e}")
 
-# Обработка выбора действия
 async def handle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -68,7 +68,6 @@ async def handle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       reply_markup=InlineKeyboardMarkup(keyboard))
         return SHOW_SUPPORT
 
-# Обработка кнопки "Назад"
 async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -81,7 +80,6 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("Привет! Что вы хотите сделать?", reply_markup=InlineKeyboardMarkup(keyboard))
     return SELECT_ACTION
 
-# Выбор канала
 async def select_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -102,7 +100,6 @@ async def select_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ENTER_VACANCY
 
-# Прием текста вакансии
 async def receive_vacancy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['vacancy'] = update.message.text
     keyboard = [
@@ -113,7 +110,6 @@ async def receive_vacancy(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     reply_markup=InlineKeyboardMarkup(keyboard))
     return CONFIRM_VACANCY
 
-# Публикация вакансии
 async def confirm_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -129,14 +125,16 @@ async def confirm_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("✅ Ваша вакансия успешно опубликована! Чтобы снова запустить бота, напишите /start ему в чат!")
     return ConversationHandler.END
 
-# Отмена
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
 
-# Запуск бота
+async def on_startup(app: web.Application):
+    await app["bot_app"].bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}{WEBHOOK_SECRET_PATH}")
+    print("Webhook установлен")
+
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    bot_app = Application.builder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -167,13 +165,18 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    app.add_handler(conv_handler)
-    app.add_handler(CommandHandler("myid", get_my_id))  # временно для получения ID
+    bot_app.add_handler(conv_handler)
+    bot_app.add_handler(CommandHandler("myid", get_my_id))
 
-    # Пинг каждые 5 минут
-    app.job_queue.run_repeating(ping, interval=300, first=10)
+    bot_app.job_queue.run_repeating(ping, interval=300, first=10)
 
-    app.run_polling()
+    # aiohttp web server
+    app = web.Application()
+    app["bot_app"] = bot_app
+    app.add_routes([web.post(WEBHOOK_SECRET_PATH, bot_app.webhook_handler())])
+    app.on_startup.append(on_startup)
+
+    web.run_app(app, port=PORT)
 
 if __name__ == "__main__":
     main()
