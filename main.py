@@ -3,6 +3,7 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
     ConversationHandler, ContextTypes, filters
 )
+from telegram.ext.webhookhandler import WebhookRequestHandler
 from aiohttp import web
 import os
 from dotenv import load_dotenv
@@ -130,7 +131,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def on_startup(app: web.Application):
-    await app["bot_app"].bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}{WEBHOOK_SECRET_PATH}")
+    await app["bot"].bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}{WEBHOOK_SECRET_PATH}")
     print("Webhook установлен")
 
 def main():
@@ -167,13 +168,13 @@ def main():
 
     bot_app.add_handler(conv_handler)
     bot_app.add_handler(CommandHandler("myid", get_my_id))
-
     bot_app.job_queue.run_repeating(ping, interval=300, first=10)
 
-    # aiohttp web server
+    # Webhook + aiohttp
     app = web.Application()
-    app["bot_app"] = bot_app
-    app.add_routes([web.post(WEBHOOK_SECRET_PATH, bot_app.webhook_handler())])
+    app["bot"] = bot_app
+    webhook_handler = WebhookRequestHandler(application=bot_app, check_token=False)
+    app.router.add_post(WEBHOOK_SECRET_PATH, webhook_handler.handle)
     app.on_startup.append(on_startup)
 
     web.run_app(app, port=PORT)
