@@ -3,7 +3,6 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
     ConversationHandler, ContextTypes, filters
 )
-from telegram.ext.webhookhandler import WebhookRequestHandler
 from aiohttp import web
 import os
 from dotenv import load_dotenv
