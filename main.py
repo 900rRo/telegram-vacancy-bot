@@ -1,6 +1,5 @@
 import os
 from dotenv import load_dotenv
-from aiohttp import web
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
@@ -11,7 +10,6 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 TELEGRAM_ID = os.getenv("TELEGRAM_ID")
-WEBHOOK_SECRET_PATH = f"/{BOT_TOKEN}"
 PORT = int(os.getenv("PORT", "8443"))
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
@@ -129,23 +127,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
 
-# aiohttp обработчик вебхуков
-async def webhook_handler(request: web.Request):
-    if request.match_info.get('token') != BOT_TOKEN:
-        return web.Response(status=403)
-    json_data = await request.json()
-    update = Update.de_json(json_data)
-    await app.process_update(update)
-    return web.Response(text="OK")
-
-async def on_startup(app: web.Application):
-    webhook_url = f"{RENDER_EXTERNAL_URL}/{BOT_TOKEN}"
-    await app["bot"].set_webhook(webhook_url)
-    print(f"Webhook установлен по адресу: {webhook_url}")
-
 def main():
-    global app
-    app = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -176,17 +159,19 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    app.add_handler(conv_handler)
-    app.add_handler(CommandHandler("myid", get_my_id))
-    app.job_queue.run_repeating(ping, interval=300, first=10)
+    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("myid", get_my_id))
+    application.job_queue.run_repeating(ping, interval=300, first=10)
 
-    aio_app = web.Application()
-    aio_app.router.add_post(f"/{BOT_TOKEN}", webhook_handler)
-    aio_app["bot"] = app.bot
-    aio_app.on_startup.append(on_startup)
+    webhook_url = f"{RENDER_EXTERNAL_URL}/{BOT_TOKEN}"
+    print(f"Webhook URL: {webhook_url}")
 
-    web.run_app(aio_app, port=PORT)
-
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=BOT_TOKEN,
+        webhook_url=webhook_url,
+    )
 
 if __name__ == "__main__":
     main()
