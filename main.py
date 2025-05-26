@@ -6,12 +6,10 @@ from telegram.ext import (
     ConversationHandler, ContextTypes, filters
 )
 
-
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-TELEGRAM_ID = os.getenv("TELEGRAM_ID")
-PORT = int(os.environ.get("PORT", 8443))  # Лучше так
-
+# Можно передавать несколько ID через запятую, например "12345678,87654321"
+ALLOWED_USERS = list(map(int, os.getenv("TELEGRAM_ID", "").split(",")))
+PORT = int(os.environ.get("PORT", 8443))
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 # Состояния
@@ -22,6 +20,9 @@ CHANNELS = {
     "Заработок на пляже": "@zarabotoknaplyazhe",
     "Вакансии рядом": "@Job0pening3"
 }
+
+def user_is_allowed(user_id: int) -> bool:
+    return user_id in ALLOWED_USERS
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -38,11 +39,18 @@ async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ping(context: ContextTypes.DEFAULT_TYPE):
     try:
-        await context.bot.send_message(chat_id=TELEGRAM_ID, text="✅ Я работаю!")
+        # Пингуем только первого ID из списка
+        if ALLOWED_USERS:
+            await context.bot.send_message(chat_id=ALLOWED_USERS[0], text="✅ Я работаю!")
     except Exception as e:
         print(f"Ошибка при отправке пинга: {e}")
 
 async def handle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not user_is_allowed(user_id):
+        await update.callback_query.answer("Доступ запрещён.", show_alert=True)
+        return
+
     query = update.callback_query
     await query.answer()
 
@@ -80,6 +88,11 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SELECT_ACTION
 
 async def select_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not user_is_allowed(user_id):
+        await update.callback_query.answer("Доступ запрещён.", show_alert=True)
+        return ConversationHandler.END
+
     query = update.callback_query
     await query.answer()
     context.user_data['channel'] = query.data
@@ -100,6 +113,11 @@ async def select_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ENTER_VACANCY
 
 async def receive_vacancy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not user_is_allowed(user_id):
+        await update.message.reply_text("Доступ запрещён.")
+        return ConversationHandler.END
+
     context.user_data['vacancy'] = update.message.text
     keyboard = [
         [InlineKeyboardButton("Готово", callback_data="publish_vacancy")],
@@ -110,6 +128,11 @@ async def receive_vacancy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CONFIRM_VACANCY
 
 async def confirm_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not user_is_allowed(user_id):
+        await update.callback_query.answer("Доступ запрещён.", show_alert=True)
+        return ConversationHandler.END
+
     query = update.callback_query
     await query.answer()
 
