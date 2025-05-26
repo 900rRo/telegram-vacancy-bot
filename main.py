@@ -1,4 +1,5 @@
 import os
+import logging
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -6,13 +7,17 @@ from telegram.ext import (
     ConversationHandler, ContextTypes, filters
 )
 
+# Логирование в консоль
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-# Можно передавать несколько ID через запятую, например "12345678,87654321"
-ALLOWED_USERS = list(map(int, os.getenv("TELEGRAM_ID", "").split(",")))
+TELEGRAM_ID = int(os.getenv("TELEGRAM_ID"))  # Важно: ID должен быть int
 PORT = int(os.environ.get("PORT", 8443))
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
-# Состояния
 SELECT_ACTION, SELECT_CHANNEL, ENTER_VACANCY, CONFIRM_VACANCY, SHOW_INFO, SHOW_SUPPORT = range(6)
 
 CHANNELS = {
@@ -21,10 +26,18 @@ CHANNELS = {
     "Вакансии рядом": "@Job0pening3"
 }
 
-def user_is_allowed(user_id: int) -> bool:
-    return user_id in ALLOWED_USERS
+# Утилита для уведомления админа
+async def notify_admin(context: ContextTypes.DEFAULT_TYPE, message: str):
+    try:
+        await context.bot.send_message(chat_id=TELEGRAM_ID, text=message)
+    except Exception as e:
+        logging.error(f"Ошибка при отправке уведомления админу: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    logging.info(f"/start от {user.id} @{user.username} ({user.full_name})")
+    await notify_admin(context, f"/start от {user.full_name} (@{user.username}) [{user.id}]")
+
     keyboard = [
         [InlineKeyboardButton("Опубликовать вакансию", callback_data="publish")],
         [InlineKeyboardButton("Вопросы", callback_data="info")],
@@ -34,22 +47,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SELECT_ACTION
 
 async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+    user = update.effective_user
+    logging.info(f"/myid от {user.id} @{user.username}")
+    await notify_admin(context, f"/myid от {user.full_name} (@{user.username}) [{user.id}]")
+
+    user_id = user.id
     await update.message.reply_text(f"Ваш Telegram ID: {user_id}")
 
 async def ping(context: ContextTypes.DEFAULT_TYPE):
     try:
-        # Пингуем только первого ID из списка
-        if ALLOWED_USERS:
-            await context.bot.send_message(chat_id=ALLOWED_USERS[0], text="✅ Я работаю!")
+        await context.bot.send_message(chat_id=TELEGRAM_ID, text="✅ Я работаю!")
     except Exception as e:
-        print(f"Ошибка при отправке пинга: {e}")
+        logging.error(f"Ошибка при отправке пинга: {e}")
 
 async def handle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not user_is_allowed(user_id):
-        await update.callback_query.answer("Доступ запрещён.", show_alert=True)
-        return
+    user = update.effective_user
+    logging.info(f"handle_action: {user.id} @{user.username} нажал {update.callback_query.data}")
+    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] нажал кнопку: {update.callback_query.data}")
 
     query = update.callback_query
     await query.answer()
@@ -76,6 +90,10 @@ async def handle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return SHOW_SUPPORT
 
 async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    logging.info(f"back_to_start: {user.id} @{user.username}")
+    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] вернулся в меню")
+
     query = update.callback_query
     await query.answer()
 
@@ -88,10 +106,9 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SELECT_ACTION
 
 async def select_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not user_is_allowed(user_id):
-        await update.callback_query.answer("Доступ запрещён.", show_alert=True)
-        return ConversationHandler.END
+    user = update.effective_user
+    logging.info(f"select_channel: {user.id} @{user.username} выбрал канал {update.callback_query.data}")
+    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] выбрал канал: {update.callback_query.data}")
 
     query = update.callback_query
     await query.answer()
@@ -113,10 +130,9 @@ async def select_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ENTER_VACANCY
 
 async def receive_vacancy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not user_is_allowed(user_id):
-        await update.message.reply_text("Доступ запрещён.")
-        return ConversationHandler.END
+    user = update.effective_user
+    logging.info(f"receive_vacancy: {user.id} @{user.username} отправил вакансию")
+    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] отправил вакансию")
 
     context.user_data['vacancy'] = update.message.text
     keyboard = [
@@ -128,10 +144,9 @@ async def receive_vacancy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CONFIRM_VACANCY
 
 async def confirm_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not user_is_allowed(user_id):
-        await update.callback_query.answer("Доступ запрещён.", show_alert=True)
-        return ConversationHandler.END
+    user = update.effective_user
+    logging.info(f"confirm_publish: {user.id} @{user.username} подтвердил публикацию")
+    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] подтвердил публикацию вакансии")
 
     query = update.callback_query
     await query.answer()
@@ -148,6 +163,10 @@ async def confirm_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    logging.info(f"cancel: {user.id} @{user.username} отменил операцию")
+    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] отменил операцию")
+
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
 
