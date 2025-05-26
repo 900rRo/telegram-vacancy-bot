@@ -10,7 +10,8 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 TELEGRAM_ID = os.getenv("TELEGRAM_ID")
-PORT = int(os.getenv("PORT", "8443"))
+PORT = int(os.environ.get("PORT", 8443))  # Лучше так
+
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 # Состояния
