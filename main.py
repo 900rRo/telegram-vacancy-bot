@@ -1,22 +1,18 @@
 import os
 import logging
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
     ConversationHandler, ContextTypes, filters
 )
 
-# Логирование в консоль
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-TELEGRAM_ID = int(os.getenv("TELEGRAM_ID"))  # Важно: ID должен быть int
-PORT = int(os.environ.get("PORT", 8443))
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
+TELEGRAM_ID = int(os.getenv("TELEGRAM_ID"))
 
 SELECT_ACTION, SELECT_CHANNEL, ENTER_VACANCY, CONFIRM_VACANCY, SHOW_INFO, SHOW_SUPPORT = range(6)
 
@@ -26,7 +22,6 @@ CHANNELS = {
     "Вакансии рядом": "@Job0pening3"
 }
 
-# Утилита для уведомления админа
 async def notify_admin(context: ContextTypes.DEFAULT_TYPE, message: str):
     try:
         await context.bot.send_message(chat_id=TELEGRAM_ID, text=message)
@@ -48,11 +43,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    logging.info(f"/myid от {user.id} @{user.username}")
-    await notify_admin(context, f"/myid от {user.full_name} (@{user.username}) [{user.id}]")
-
-    user_id = user.id
-    await update.message.reply_text(f"Ваш Telegram ID: {user_id}")
+    await update.message.reply_text(f"Ваш Telegram ID: {user.id}")
 
 async def ping(context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -61,12 +52,10 @@ async def ping(context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Ошибка при отправке пинга: {e}")
 
 async def handle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logging.info(f"handle_action: {user.id} @{user.username} нажал {update.callback_query.data}")
-    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] нажал кнопку: {update.callback_query.data}")
-
     query = update.callback_query
     await query.answer()
+    user = update.effective_user
+    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] нажал: {query.data}")
 
     if query.data == "publish":
         keyboard = [[InlineKeyboardButton(name, callback_data=name)] for name in CHANNELS.keys()]
@@ -90,12 +79,10 @@ async def handle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return SHOW_SUPPORT
 
 async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logging.info(f"back_to_start: {user.id} @{user.username}")
-    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] вернулся в меню")
-
     query = update.callback_query
     await query.answer()
+    user = update.effective_user
+    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] вернулся в меню")
 
     keyboard = [
         [InlineKeyboardButton("Опубликовать вакансию", callback_data="publish")],
@@ -106,10 +93,6 @@ async def back_to_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SELECT_ACTION
 
 async def select_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logging.info(f"select_channel: {user.id} @{user.username} выбрал канал {update.callback_query.data}")
-    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] выбрал канал: {update.callback_query.data}")
-
     query = update.callback_query
     await query.answer()
     context.user_data['channel'] = query.data
@@ -124,16 +107,10 @@ async def select_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Теперь отправьте текст вакансии в таком же формате."
     )
 
-    await query.edit_message_text(
-        f"Вы выбрали канал: {query.data}\n\n{example_vacancy}\n\nТеперь отправьте текст вакансии."
-    )
+    await query.edit_message_text(f"Вы выбрали канал: {query.data}\n\n{example_vacancy}")
     return ENTER_VACANCY
 
 async def receive_vacancy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logging.info(f"receive_vacancy: {user.id} @{user.username} отправил вакансию")
-    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] отправил вакансию")
-
     context.user_data['vacancy'] = update.message.text
     keyboard = [
         [InlineKeyboardButton("Готово", callback_data="publish_vacancy")],
@@ -144,10 +121,6 @@ async def receive_vacancy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CONFIRM_VACANCY
 
 async def confirm_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logging.info(f"confirm_publish: {user.id} @{user.username} подтвердил публикацию")
-    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] подтвердил публикацию вакансии")
-
     query = update.callback_query
     await query.answer()
 
@@ -158,15 +131,10 @@ async def confirm_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=selected_channel,
         text=f"{vacancy_text}\n\nРазмещено через @WorkDromBot"
     )
-
     await query.edit_message_text("✅ Ваша вакансия успешно опубликована! Чтобы снова запустить бота, напишите /start ему в чат!")
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logging.info(f"cancel: {user.id} @{user.username} отменил операцию")
-    await notify_admin(context, f"{user.full_name} (@{user.username}) [{user.id}] отменил операцию")
-
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
 
@@ -192,12 +160,8 @@ def main():
                 CallbackQueryHandler(confirm_publish, pattern="^publish_vacancy$"),
                 CallbackQueryHandler(back_to_start, pattern="^back_to_start$")
             ],
-            SHOW_INFO: [
-                CallbackQueryHandler(back_to_start, pattern="^back_to_start$")
-            ],
-            SHOW_SUPPORT: [
-                CallbackQueryHandler(back_to_start, pattern="^back_to_start$")
-            ],
+            SHOW_INFO: [CallbackQueryHandler(back_to_start, pattern="^back_to_start$")],
+            SHOW_SUPPORT: [CallbackQueryHandler(back_to_start, pattern="^back_to_start$")]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
@@ -206,15 +170,7 @@ def main():
     application.add_handler(CommandHandler("myid", get_my_id))
     application.job_queue.run_repeating(ping, interval=300, first=10)
 
-    webhook_url = f"{RENDER_EXTERNAL_URL}/{BOT_TOKEN}"
-    print(f"Webhook URL: {webhook_url}")
-
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=BOT_TOKEN,
-        webhook_url=webhook_url,
-    )
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
