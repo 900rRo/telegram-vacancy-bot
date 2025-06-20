@@ -206,25 +206,20 @@ async def main():
 
     HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "localhost")
     PORT = int(os.environ.get("PORT", 8080))
-    WEBHOOK_PATH = "/webhook"
-    WEBHOOK_URL = f"https://{HOST}{WEBHOOK_PATH}"
+    # Для webhook слушаем на корне "/"
+    WEBHOOK_URL = f"https://{HOST}/"
 
+    # Устанавливаем webhook у Telegram
     await application.bot.set_webhook(WEBHOOK_URL)
 
+    # Запускаем webhook сервер
     await application.run_webhook(
-    listen="0.0.0.0",
-    port=PORT,
-    webhook_url=WEBHOOK_URL,
-    webhook_path=WEBHOOK_PATH
-)
-
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL
+    )
 
 if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
     asyncio.run(main())
-
-
-
-
-
