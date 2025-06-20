@@ -218,9 +218,8 @@ async def main():
     )
 
 if __name__ == "__main__":
-    import nest_asyncio
-    nest_asyncio.apply()
     asyncio.run(main())
+
 
 
 
