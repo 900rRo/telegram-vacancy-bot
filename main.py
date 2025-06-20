@@ -48,7 +48,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Вопросы", callback_data="info")],
         [InlineKeyboardButton("Поддержка", callback_data="support")]
     ]
-    await update.message.reply_text("Привет! Что вы хотите сделать?", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.effective_chat.send_message("Привет! Что вы хотите сделать?", reply_markup=InlineKeyboardMarkup(keyboard))
     return SELECT_ACTION
 
 async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
