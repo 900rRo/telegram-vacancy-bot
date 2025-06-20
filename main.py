@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
@@ -167,7 +168,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
 
-def main():
+async def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
@@ -203,7 +204,18 @@ def main():
     application.add_handler(CommandHandler("myid", get_my_id))
     application.job_queue.run_repeating(ping, interval=300, first=10)
 
-    application.run_polling()
+    HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "localhost")
+    PORT = int(os.environ.get("PORT", 8080))
+    WEBHOOK_PATH = "/webhook"
+    WEBHOOK_URL = f"https://{HOST}{WEBHOOK_PATH}"
+
+    await application.bot.set_webhook(WEBHOOK_URL)
+
+    await application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL
+    )
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
